@@ -46,15 +46,15 @@ if __name__ == "__main__":
     if args.manipulation_type == "skip":
         enable_skip_attention(model)
         output = model(input_ids,
-                       skip_attention_layers=range(args.manipulated_layer, 33),
-                       output_hidden_states=True)
+                       skip_attention_layers=range(args.manipulated_layer, 100),
+                       )
     else:
         enable_manipulated_gen(model)
         output = model(input_ids,
                        distrupt_type=args.manipulation_type,
                        distrupt_layer=args.manipulated_layer,
                        distrupt_tokens=range(input_ids.shape[1] - 1),
-                       output_hidden_states=True)
+                       )
 
     logits = torch.nn.Softmax(dim=0)(output.logits[0, -1, :])
     next_token = tokenizer.decode(torch.argmax(logits))
