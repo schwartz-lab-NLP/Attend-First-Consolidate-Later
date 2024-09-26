@@ -1,173 +1,120 @@
-import math
-import numpy as np
 import torch
 
 
-def get_random_orthogonal(u):
-    """
-    Returns a random vector orthogonal to u.
-    """
-    v = torch.randn_like(u).to(u.device)
-    v = v - (torch.dot(u, v) / torch.linalg.norm(u)**2) * u
-    v = (v / torch.linalg.norm(v)) * torch.linalg.norm(u)
-    return v
-
-
-def get_random_vector_at_angle(u, angle):
-    """
-    angle in degrees!
-    Returns a vector v with the same norm as u, such that angle(u,v)=angle
-    """
-    radians_angle = math.radians(angle)
-    rand_o = get_random_orthogonal(u).to(u.device)
-    v = math.cos(radians_angle) * u + math.sin(radians_angle) * rand_o
-    return v
-
-
-class DistruptClass:
+class ManipulatorClass:
 
     def __init__(self,
-                 distrupt_layer: int,
-                 distrupt_tokens: list,
-                 distrupt_type: str,
-                 angle=None,
-                 switch_dict: dict = None,
-                 save_switched: bool = False):
-        self.distrupt_layer = distrupt_layer
-        self.distrupt_tokens = distrupt_tokens
-        self.distrupt_type = distrupt_type
-        self.angle = angle
-        self.user_switch_dict = switch_dict
-        self.freeze_dict = {}
-        self.switch_dict = {}
-        self.save_switched = save_switched
-        self.noise_norm = 0
+                 manipulation_layer: int,
+                 manipulation_tokens: list,
+                 manipulation_type: str,
+                 injection_dict: dict = None,
+                 save_manipulation: bool = False):
+        """_summary_
 
-        # print(f'GOTTEN DISTRUPT TYPE {self.distrupt_type}')
+        Args:
+            manipulation_layer (int): Layer (int) to apply manipulation
+            manipulation_tokens (list): List of indexes of tokens to manipulate
+            manipulation_type (str): Type of manipulation to apply, from ['freeze', 'information_injection', 'random', 'shuffle']
+            injection_dict (dict, optional): Dictionary of injection tensors, from the format {injection_token_idx: injection_tensor}.
+            save_manipulation (bool, optional): To save switched representations.
 
-        modes_list = [
-            'freeze', 'switch_dict', 'random_switch', 'angle_switch',
-            'random_shuffle'
-        ]
+        More about injections: The injection dict is from the format {injection_token_idx: injection_tensor}. 
+        Meaning, at layer manipulation_layer, the hidden representation in index injection_token_idx,
+        will be replaced with injection_tensor.
+        """
 
-        if distrupt_type == 'switch_dict':
-            print(f'{self.user_switch_dict.keys()=}')
+        self.manipulation_layer = manipulation_layer
+        self.manipulation_tokens = manipulation_tokens
+        self.manipulation_type = manipulation_type
+        self.injection_dict = injection_dict
+        self.save_manipulation = save_manipulation
 
-        if distrupt_type not in modes_list:
+        self.freeze_dict = {} # Saves frozen representation from previous layers
+        self.manipulation_dict = {} # Saves the applied manipulation
+
+        modes_list = ['freeze', 'random', 'shuffle', 'information_injection']
+
+        if manipulation_type not in modes_list:
             print(
-                f"distrupt_type unrecognized, is {distrupt_type}. Should be in {modes_list}",
+                f"manipulation_type unrecognized, is {manipulation_type}. Should be in {modes_list}",
                 flush=True)
             exit(-1)
-        if distrupt_type == 'switch_dict' and (switch_dict is None
-                                               or type(switch_dict) != dict):
+        if manipulation_type == 'information_injection' and (
+                injection_dict is None or type(injection_dict) != dict):
             print(
-                f"To use switch_dict, you must provide a switch_dict. You have provided {switch_dict=}, {type(switch_dict)=}",
+                f"To use information_injection, you must provide a injection_dict. You have provided {injection_dict=}, {type(injection_dict)=}",
                 flush=True)
-            exit(-1)
-        if distrupt_type == 'angle_switch' and (angle is None):
-            print(f'to use angle_switch, you must provide angle.', flush=True)
             exit(-1)
 
     def apply_distruption(self, idx, hidden_states):
-        if self.distrupt_type == 'freeze':
+        if self.manipulation_type == 'freeze':
             return self.apply_freeze(idx=idx, hidden_states=hidden_states)
-        if idx == self.distrupt_layer:
-            if self.distrupt_type == 'switch_dict':
-                # print(f'APPLYING DICT SWICH, {idx=}')
-                return self.apply_dict_switch(hidden_states)
-            if self.distrupt_type == 'random_switch':
-                # print(f'APPLYING RANDOM SWITCH')
-                return self.apply_random_switch(hidden_states)
-            if self.distrupt_type == 'angle_switch':
-                return self.apply_angle_switch(hidden_states)
-            if self.distrupt_type == 'random_shuffle':
+        if idx == self.manipulation_layer:
+            if self.manipulation_type == 'information_injection':
+                return self.apply_injection(hidden_states)
+            if self.manipulation_type == 'random':
+                return self.apply_random_noise(hidden_states)
+            if self.manipulation_type == 'shuffle':
                 return self.apply_shuffle_random(idx=idx,
                                                  hidden_states=hidden_states)
         else:
             return hidden_states
 
     def apply_freeze(self, idx, hidden_states):
-        if idx == self.distrupt_layer - 1:
-            # print(f'APPLY FREEZE: SAVING HIDDEN STATE, {idx=}')
-            for token_idx in self.distrupt_tokens:
+        if idx == self.manipulation_layer - 1:
+            for token_idx in self.manipulation_tokens:
                 if token_idx < hidden_states.shape[1]:
                     self.freeze_dict[token_idx] = hidden_states[0][
                         token_idx].clone()
             return hidden_states
-        elif idx >= self.distrupt_layer:
-            # print(f'APPLY FREEZE: USE SAVED HIDDEN STATE, {idx=}')
-            for token_idx in self.distrupt_tokens:
+        elif idx >= self.manipulation_layer:
+            for token_idx in self.manipulation_tokens:
                 if token_idx < hidden_states.shape[1]:
 
                     hidden_states[0][token_idx] = self.freeze_dict[token_idx]
             return hidden_states
         return hidden_states
 
-    def apply_dict_switch(self, hidden_states):
-        # print(f'INSIDE SWITCH_DICT1, {self.user_switch_dict.keys()=}')
-        for token_idx, v in self.user_switch_dict.items():
+    def apply_injection(self, hidden_states):
+        for token_idx, v in self.injection_dict.items():
             v = v.to(hidden_states.device)
-            self.switch_saver(token_idx=token_idx,
-                              og_vector=hidden_states[0][token_idx],
-                              switch_vector=v)
-            temp = hidden_states[0][token_idx].clone()
-            hidden_states[0][token_idx] = v
-            temp2 = temp - hidden_states[0][token_idx]
-            # print(f'INSIDE SWITCH_DICT, {temp2.mean()=}')
-            del temp
-            del temp2
-        return hidden_states
-
-    def apply_random_switch(self, hidden_states):
-        for token_idx in self.distrupt_tokens:
-            v = torch.randn_like(hidden_states[0][token_idx])
-            v = (v / torch.norm(v, 2)) * torch.norm(
-                hidden_states[0][token_idx], 2)
-            v = v.to(hidden_states.device)
-            self.switch_saver(token_idx=token_idx,
-                              og_vector=hidden_states[0][token_idx],
-                              switch_vector=v)
-            temp = hidden_states[0][token_idx].clone()
-            hidden_states[0][token_idx] = v
-            # print(f'AFTER RANDOM SWITCH: {(temp-hidden_states[0][token_idx]).max()=}')
-        return hidden_states
-
-    def apply_angle_switch(self, hidden_states):
-        for token_idx in self.distrupt_tokens:
-            v = get_random_vector_at_angle(hidden_states[0][token_idx],
-                                           self.angle)
-            v = v.to(hidden_states.device)
-            self.switch_saver(token_idx=token_idx,
-                              og_vector=hidden_states[0][token_idx],
-                              switch_vector=v)
+            self.manipulation_saver(token_idx=token_idx,
+                                    og_vector=hidden_states[0][token_idx],
+                                    switch_vector=v)
             hidden_states[0][token_idx] = v
         return hidden_states
 
     def apply_random_noise(self, hidden_states):
-        for token_idx in self.distrupt_tokens:
-            noise = torch.randn_like(hidden_states[0][token_idx])
-            noise = (noise / torch.linalg.vector_norm(noise)) * self.noise_norm
-            noise.to(hidden_states.device)
-            hidden_states[0][token_idx] += noise
+        for token_idx in self.manipulation_tokens:
+            v = torch.randn_like(hidden_states[0][token_idx])
+            # Normalize random vector to current hidden representation:
+            v = (v / torch.norm(v, 2)) * torch.norm(
+                hidden_states[0][token_idx], 2)
+            v = v.to(hidden_states.device)
+            self.manipulation_saver(token_idx=token_idx,
+                                    og_vector=hidden_states[0][token_idx],
+                                    switch_vector=v)
+            hidden_states[0][token_idx] = v
+        return hidden_states
 
     def apply_shuffle_random(self, idx, hidden_states):
-        for token_idx in self.distrupt_tokens:
+        for token_idx in self.manipulation_tokens:
             torch.manual_seed(idx * token_idx)
             indexes = torch.randperm(hidden_states[0, token_idx, :].shape[-1])
             shuffled = hidden_states[0][token_idx][indexes].to(
                 hidden_states.device)
-            self.switch_saver(token_idx=token_idx,
-                              og_vector=hidden_states[0][token_idx],
-                              switch_vector=shuffled)
+            self.manipulation_saver(token_idx=token_idx,
+                                    og_vector=hidden_states[0][token_idx],
+                                    switch_vector=shuffled)
             hidden_states[0][token_idx] = shuffled
         return hidden_states
 
-    def switch_saver(self, token_idx, og_vector, switch_vector):
-        if self.save_switched:
-            self.switch_dict[token_idx] = {
+    def manipulation_saver(self, token_idx, og_vector, switch_vector):
+        if self.save_manipulation:
+            self.manipulation_dict[token_idx] = {
                 'og_vector': og_vector.clone().detach().cpu().numpy(),
                 'switch_vector': switch_vector.clone().detach().cpu().numpy()
             }
 
-    def get_switch_dict(self):
-        return self.switch_dict
+    def get_manipulation_dict(self):
+        return self.manipulation_dict

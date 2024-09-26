@@ -1,4 +1,4 @@
-from .manipulations_utils import DistruptClass
+from .manipulations_utils import ManipulatorClass
 
 from typing import Optional, Tuple
 import torch
@@ -102,18 +102,18 @@ def mistral_model_manipulated_forward(
 
 
     for key in [
-            'distrupt_layer', 'distrupt_tokens', 'distrupt_type', 'angle',
-            'switch_dict'
+            'manipulation_layer', 'manipulation_type',
+            'injection_dict'
     ]:
         if key not in kwargs['kwargs'].keys():
             kwargs['kwargs'][key] = None
 
-    distrupter = DistruptClass(
-        distrupt_layer=kwargs['kwargs']['distrupt_layer'],
-        distrupt_tokens=kwargs['kwargs']['distrupt_tokens'],
-        distrupt_type=kwargs['kwargs']['distrupt_type'],
-        switch_dict=kwargs['kwargs']['switch_dict'],
-        angle=kwargs['kwargs']['angle'])
+    distrupter = ManipulatorClass(
+        manipulation_layer=kwargs['kwargs']['manipulation_layer'],
+        manipulation_tokens=range(input_ids.shape[1] - 1),
+        manipulation_type=kwargs['kwargs']['manipulation_type'],
+        injection_dict=kwargs['kwargs']['injection_dict'],
+)
 
     # retrieve input_ids and inputs_embeds
     if (input_ids is None) ^ (inputs_embeds is not None):
