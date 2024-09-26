@@ -59,9 +59,7 @@ input_ids = tokenizer("Your Prompt", return_tensors="pt").input_ids.to('cuda:0')
 skip_attention_from = 15
 
 enable_skip_attention(model)
-output = model(input_ids,
-				skip_attention_layers=range(skip_attention_from, 100),
-				)
+output = model(input_ids, skip_attention_layers=range(skip_attention_from, 100))
 ```
 
 ## Information Injection
