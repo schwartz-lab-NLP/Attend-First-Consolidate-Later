@@ -29,8 +29,7 @@ import torch
 tokenizer = AutoTokenizer.from_pretrained("your_model")
 model = AutoModelForCausalLM.from_pretrained("your_model")
 
-input_ids = tokenizer("Your Prompt",
-						return_tensors="pt").input_ids.to('cuda:0')
+input_ids = tokenizer("Your Prompt", return_tensors="pt").input_ids.to('cuda:0')
 
 manipulation_layer = 15
 manipulation_options = ["freeze", "random", "shuffle"]
@@ -55,8 +54,7 @@ import torch
 tokenizer = AutoTokenizer.from_pretrained("your_model")
 model = AutoModelForCausalLM.from_pretrained("your_model")
 
-input_ids = tokenizer("Your Prompt",
-						return_tensors="pt").input_ids.to('cuda:0')
+input_ids = tokenizer("Your Prompt", return_tensors="pt").input_ids.to('cuda:0')
 
 skip_attention_from = 15
 
