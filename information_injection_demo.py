@@ -5,15 +5,6 @@ import torch
 
 
 def get_args():
-
-    def tf_helper(s):
-        if s == "True":
-            return True
-        if s == "False":
-            return False
-        else:
-            exit(-1)
-
     parser = argparse.ArgumentParser()
     parser.add_argument('--model',
                         required=True,
@@ -23,20 +14,12 @@ def get_args():
                         help='Layer to apply manipulation',
                         type=int)
     parser.add_argument(
-        '--print_injection',
-        default="False",
-        type=str,
-        choices=["True", "False"],
-        help="Extra prints which demonstrate the injection process. True\False"
-    )
-    parser.add_argument(
         '--hf_token',
         type=str,
         required=True,
         help="huggingface authentication token"
     )
     args = parser.parse_args()
-    args.print_injection = tf_helper(args.print_injection)
     print(f'{args=}')
     return args
 
@@ -99,23 +82,5 @@ if __name__ == "__main__":
                                output_hidden_states=True)
     manipulated_next_token = get_next_token(manipulated_output.logits)
 
-    if args.print_injection:
-        for layer_idx in range(len(original_output.hidden_states)):
-            cur_original_hidden = original_output.hidden_states[layer_idx]
-            cur_manipulated_hidden = manipulated_output.hidden_states[
-                layer_idx]
-
-            if layer_idx == args.manipulation_layer:
-                switch_worked = torch.equal(
-                    cur_manipulated_hidden[0][france_idx].cpu(),
-                    italy_hidden.cpu())
-                print(
-                    f'SWITCH LAYER: {layer_idx=}, hidden_equal={torch.equal(cur_original_hidden.cpu(), cur_manipulated_hidden.cpu())}, {switch_worked=}'
-                )
-
-            else:
-                print(
-                    f'{layer_idx=}, hidden_equal={torch.equal(cur_original_hidden.cpu(), cur_manipulated_hidden.cpu())}'
-                )
     print(f'{original_prompt=}, {injection_prompt=}')
     print(f'{original_next_token=}, {manipulated_next_token=}')
